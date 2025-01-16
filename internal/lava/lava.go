@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -137,6 +139,8 @@ func scanRepo(c *Client, repo string, wg *sync.WaitGroup, sem chan struct{}, res
 	cmd.Stderr = &errBuf
 
 	err := cmd.Run()
+	c.storeResults(repo, outBuf.Bytes(), errBuf.Bytes())
+
 	if cmd.ProcessState.ExitCode() > 0 {
 		c.logger.Error("failed to run Lava", "error", err, "repository", repo, "stderr", errBuf.String(), "stdout", outBuf.String(), "duration", time.Since(t).Seconds())
 		summary = append(summary, Summary{Repository: repo, Error: fmt.Sprintf("error running Lava: %s", err.Error())})
@@ -172,4 +176,54 @@ func scanRepo(c *Client, repo string, wg *sync.WaitGroup, sem chan struct{}, res
 	c.logger.Info("repository scan completed successfully", "repository", repo, "duration", time.Since(t).Seconds())
 
 	resultChan <- summary
+}
+
+func (c *Client) storeResults(target string, stdout, stderr []byte) {
+	if c.cfg.ResultsPath == "" {
+		return
+	}
+
+	org, repo, err := orgAndRepo(target)
+	if err != nil {
+		c.logger.Error("failed to parse target", "target", target, "error", err)
+		return
+	}
+
+	resultsPath := fmt.Sprintf("%s%s/%s", c.cfg.ResultsPath, org, repo)
+	err = os.MkdirAll(resultsPath, os.ModePerm)
+	if err != nil {
+		c.logger.Error("failed to create results directory", "path", resultsPath, "error", err)
+		return
+	}
+
+	stdOutFile := fmt.Sprintf("%s/stdout.json", resultsPath)
+	stdErrFile := fmt.Sprintf("%s/stderr.log", resultsPath)
+
+	err = os.WriteFile(stdOutFile, stdout, 0644)
+	if err != nil {
+		c.logger.Error("failed to write stdout Lava scan results", "repository", target, "path", stdOutFile, "error", err)
+		return
+	}
+
+	err = os.WriteFile(stdErrFile, stderr, 0644)
+	if err != nil {
+		c.logger.Error("failed to write stderr Lava scan results", "repository", target, "path", stdErrFile, "error", err)
+		return
+	}
+
+	c.logger.Debug("Lava scan results stored", "repository", target, "stdout", stdOutFile, "stderr", stdErrFile)
+}
+
+func orgAndRepo(target string) (string, string, error) {
+	parsedURL, err := url.Parse(target)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid URL: %v", err)
+	}
+
+	pathParts := strings.Split(strings.Trim(parsedURL.Path, "/"), "/")
+	if len(pathParts) < 2 {
+		return "", "", fmt.Errorf("invalid GitHub URL path: %s", parsedURL.Path)
+	}
+
+	return pathParts[0], pathParts[1], nil
 }

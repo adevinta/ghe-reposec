@@ -12,7 +12,7 @@ Binary distributions are available in the [releases] section.
 Install the Lava command with `go install`.
 
 ```sh
-go install github.com/adevinta/ghe-reposec
+go install github.com/adevinta/ghe-reposec@latest
 ```
 
 ### Requirements
@@ -43,12 +43,14 @@ The `ghe-reposec` tool can be configured using environment variables. Below are 
 - `REPOSEC_GHE_INCLUDE_FORKS`: Include forked repositories (default: `false`).
 - `REPOSEC_GHE_INCLUDE_TEMPLATES`: Include template repositories (default: `false`).
 - `REPOSEC_GHE_INCLUDE_DISABLED`: Include disabled repositories (default: `false`).
+- `REPOSEC_GHE_MIN_LAST_ACTIVITY_DAYS`: The minimum number of days since the last activity in the repository (default: `0`).
 
 ### Lava Configuration
 
 - `REPOSEC_LAVA_CONCURRENCY`: The number of concurrent Lava scans (default: `10`).
 - `REPOSEC_LAVA_BINARY_PATH`: The path to the Lava binary (default: `/usr/bin/lava`).
 - `REPOSEC_LAVA_CHECK_IMAGE`: The Lava check image (default: `vulcansec/vulcan-repository-sctrl:a20516f-4aae88d`).
+- `LAVA_RESULTS_PATH`: The path where Lava results (stdout and stderr) will be stored if specified.
 
 
 ## Contributing

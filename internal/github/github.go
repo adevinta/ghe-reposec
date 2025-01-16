@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/url"
 	"sync"
+	"time"
 
 	gh "github.com/google/go-github/v67/github"
 
@@ -186,6 +187,17 @@ func orgRepositories(c *Client, org string, wg *sync.WaitGroup, sem chan struct{
 			if (repo.IsTemplate != nil && *repo.IsTemplate) && !c.cfg.IncludeTemplates {
 				c.logger.Warn("repository is a template, skipping", "repository", repo.GetFullName())
 				continue
+			}
+			// If repository hadn't been active for a while, skip it.
+			if c.cfg.MinLastActivityDays > 0 {
+				minLastActivityTS := time.Now().AddDate(0, 0, -c.cfg.MinLastActivityDays)
+				isUpdatedInactive := repo.UpdatedAt != nil && repo.UpdatedAt.Before(minLastActivityTS)
+				isPushedInactive := repo.PushedAt != nil && repo.PushedAt.Before(minLastActivityTS)
+
+				if isUpdatedInactive && isPushedInactive {
+					c.logger.Warn("repository has not been active for a while, skipping", "repository", repo.GetFullName())
+					continue
+				}
 			}
 			allRepos = append(allRepos, *repo.CloneURL)
 		}

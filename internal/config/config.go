@@ -6,6 +6,7 @@ package config
 import (
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/caarlos0/env/v11"
 )
@@ -27,6 +28,7 @@ type GHEConfig struct {
 	IncludeForks        bool `env:"GHE_INCLUDE_FORKS" envDefault:"false"`
 	IncludeTemplates    bool `env:"GHE_INCLUDE_TEMPLATES" envDefault:"false"`
 	IncludeDisabled     bool `env:"GHE_INCLUDE_DISABLED" envDefault:"false"`
+	MinLastActivityDays int  `env:"GHE_MIN_LAST_ACTIVITY_DAYS" envDefault:"0"`
 }
 
 // LavaConfig represents the Lava configuration.
@@ -37,7 +39,8 @@ type LavaConfig struct {
 	BinaryPath  string `env:"LAVA_BINARY_PATH" envDefault:"/usr/bin/lava"`
 	// TODO: Build, publish and set a "production ready docker image" once the
 	// check PR has been merged.
-	CheckImage string `env:"LAVA_CHECK_IMAGE" envDefault:"vulcansec/vulcan-repository-sctrl:a20516f-4aae88d"`
+	CheckImage  string `env:"LAVA_CHECK_IMAGE" envDefault:"vulcansec/vulcan-repository-sctrl:a20516f-4aae88d"`
+	ResultsPath string `env:"LAVA_RESULTS_PATH"`
 }
 
 // Config represents the ghe-reposec configuration.
@@ -54,33 +57,10 @@ type Config struct {
 }
 
 // Redacted returns a secret redacted version of the configuration.
-func (c *Config) Redacted() Config {
-	return Config{
-		LogLevel:       c.LogLevel,
-		LogOutput:      c.LogOutput,
-		LogFormat:      c.LogFormat,
-		TargetOrg:      c.TargetOrg,
-		OutputFilePath: c.OutputFilePath,
-		OutputFormat:   c.OutputFormat,
-		GHECfg: GHEConfig{
-			Token:               "REDACTED",
-			BaseURL:             c.GHECfg.BaseURL,
-			Concurrency:         c.GHECfg.Concurrency,
-			RepositorySizeLimit: c.GHECfg.RepositorySizeLimit,
-			IncludeArchived:     c.GHECfg.IncludeArchived,
-			IncludeEmpty:        c.GHECfg.IncludeEmpty,
-			IncludeForks:        c.GHECfg.IncludeForks,
-			IncludeTemplates:    c.GHECfg.IncludeTemplates,
-			IncludeDisabled:     c.GHECfg.IncludeDisabled,
-		},
-		LavaCfg: LavaConfig{
-			Token:       "REDACTED",
-			BaseURL:     c.LavaCfg.BaseURL,
-			Concurrency: c.LavaCfg.Concurrency,
-			BinaryPath:  c.LavaCfg.BinaryPath,
-			CheckImage:  c.LavaCfg.CheckImage,
-		},
-	}
+func (c Config) Redacted() Config {
+	c.GHECfg.Token = "REDACTED"
+	c.LavaCfg.Token = "REDACTED"
+	return c
 }
 
 // Load parses the configuration from the environment.
@@ -92,6 +72,10 @@ func Load() (*Config, error) {
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	if cfg.LavaCfg.ResultsPath != "" && !strings.HasSuffix(cfg.LavaCfg.ResultsPath, "/") {
+		cfg.LavaCfg.ResultsPath += "/"
 	}
 
 	return &cfg, nil
