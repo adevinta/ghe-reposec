@@ -80,20 +80,24 @@ func NewClient(ctx context.Context, logger *slog.Logger, cfg config.LavaConfig) 
 func (c *Client) Scan(targets []string) []Summary {
 	c.logger.Debug("start scanning repositories")
 
-	scanResultChan := make(chan []Summary)
-	sem := make(chan struct{}, c.cfg.Concurrency)
+	jobsChan := make(chan string, len(targets))
+	jobResultsChan := make(chan []Summary, len(targets))
 	var wg sync.WaitGroup
-	for _, repo := range targets {
+	for i := 0; i < c.cfg.Concurrency; i++ {
 		wg.Add(1)
-		go scanRepo(c, repo, &wg, sem, scanResultChan)
+		go c.worker(&wg, jobsChan, jobResultsChan)
 	}
-	go func() {
-		wg.Wait()
-		close(scanResultChan)
-	}()
+
+	for _, repo := range targets {
+		jobsChan <- repo
+	}
+	close(jobsChan)
+
+	wg.Wait()
+	close(jobResultsChan)
 
 	summary := []Summary{}
-	for rs := range scanResultChan {
+	for rs := range jobResultsChan {
 		for _, s := range rs {
 			summary = append(summary, s)
 			c.logger.Info(
@@ -111,12 +115,16 @@ func (c *Client) Scan(targets []string) []Summary {
 	return summary
 }
 
-func scanRepo(c *Client, repo string, wg *sync.WaitGroup, sem chan struct{}, resultChan chan<- []Summary) {
+func (c *Client) worker(wg *sync.WaitGroup, jobsChan <-chan string, jobResultsChan chan<- []Summary) {
 	defer wg.Done()
-	sem <- struct{}{}
-	defer func() { <-sem }()
-	summary := []Summary{}
+	for repo := range jobsChan {
+		summary := c.scanRepo(repo)
+		jobResultsChan <- summary
+	}
+}
 
+func (c *Client) scanRepo(repo string) []Summary {
+	summary := []Summary{}
 	t := time.Now()
 	c.logger.Debug("repository scan started", "repository", repo)
 
@@ -144,16 +152,14 @@ func scanRepo(c *Client, repo string, wg *sync.WaitGroup, sem chan struct{}, res
 	if cmd.ProcessState.ExitCode() > 0 {
 		c.logger.Error("failed to run Lava", "error", err, "repository", repo, "stderr", errBuf.String(), "stdout", outBuf.String(), "duration", time.Since(t).Seconds())
 		summary = append(summary, Summary{Repository: repo, Error: fmt.Sprintf("error running Lava: %s", err.Error())})
-		resultChan <- summary
-		return
+		return summary
 	}
 
 	var lr []report.Vulnerability
 	if err := json.Unmarshal(outBuf.Bytes(), &lr); err != nil {
 		c.logger.Error("failed to unmarshal Lava report", "error", err, "repository", repo, "stderr", errBuf.String(), "stdout", outBuf.String(), "duration", time.Since(t).Seconds())
 		summary = append(summary, Summary{Repository: repo, Error: fmt.Sprintf("error unmarsalling Lava report: %s", err.Error())})
-		resultChan <- summary
-		return
+		return summary
 	}
 
 	for _, r := range lr {
@@ -175,7 +181,7 @@ func scanRepo(c *Client, repo string, wg *sync.WaitGroup, sem chan struct{}, res
 
 	c.logger.Info("repository scan completed successfully", "repository", repo, "duration", time.Since(t).Seconds())
 
-	resultChan <- summary
+	return summary
 }
 
 func (c *Client) storeResults(target string, stdout, stderr []byte) {
