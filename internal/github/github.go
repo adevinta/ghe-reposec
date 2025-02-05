@@ -231,7 +231,10 @@ func orgRepositories(c *Client, org string, wg *sync.WaitGroup, sem chan struct{
 
 	c.logger.Debug("organization repository listing completed", "organization", org, "repositories", len(allRepos))
 	for k, v := range repoMetrics {
-		c.metrics.Gauge("repositories", v, []string{"status:" + k})
+		c.metrics.Gauge("repositories", v, []string{
+			fmt.Sprintf("status:%s", k),
+			fmt.Sprintf("organization:%s", org),
+		})
 	}
 
 	resultChan <- allRepos
