@@ -14,6 +14,7 @@ import (
 	gh "github.com/google/go-github/v67/github"
 
 	"github.com/adevinta/ghe-reposec/internal/config"
+	"github.com/adevinta/ghe-reposec/internal/metrics"
 )
 
 var (
@@ -25,14 +26,15 @@ var (
 
 // Client is a GitHub client wrapper.
 type Client struct {
-	cfg    config.GHEConfig
-	client *gh.Client
-	logger *slog.Logger
-	ctx    context.Context
+	cfg     config.GHEConfig
+	client  *gh.Client
+	logger  *slog.Logger
+	metrics *metrics.Client
+	ctx     context.Context
 }
 
 // NewClient creates a new GitHub Enterprise client.
-func NewClient(ctx context.Context, logger *slog.Logger, cfg config.GHEConfig) (*Client, error) {
+func NewClient(ctx context.Context, logger *slog.Logger, m *metrics.Client, cfg config.GHEConfig) (*Client, error) {
 	if cfg.Token == "" {
 		return nil, ErrTokenRequired
 	}
@@ -59,10 +61,11 @@ func NewClient(ctx context.Context, logger *slog.Logger, cfg config.GHEConfig) (
 	logger.Debug("GitHub Enterprise token", "owner", user.GetLogin())
 
 	return &Client{
-		cfg:    cfg,
-		logger: logger,
-		client: client,
-		ctx:    ctx,
+		cfg:     cfg,
+		logger:  logger,
+		client:  client,
+		metrics: m,
+		ctx:     ctx,
 	}, nil
 }
 
@@ -108,6 +111,7 @@ func (c *Client) Repositories(targetOrg string) ([]string, error) {
 			return []string{}, fmt.Errorf("failed to list organizations: %w", err)
 		}
 	}
+	c.metrics.Gauge("organizations", len(orgs), []string{})
 
 	c.logger.Debug("listing repositories")
 	sem := make(chan struct{}, c.cfg.Concurrency)
@@ -140,6 +144,16 @@ func orgRepositories(c *Client, org string, wg *sync.WaitGroup, sem chan struct{
 
 	c.logger.Debug("obtaining repositories for organization", "organization", org)
 
+	repoMetrics := map[string]int{
+		"too_big":  0,
+		"empty":    0,
+		"archived": 0,
+		"disabled": 0,
+		"fork":     0,
+		"template": 0,
+		"inactive": 0,
+		"selected": 0,
+	}
 	allRepos := []string{}
 	listOpts := &gh.RepositoryListByOrgOptions{ListOptions: gh.ListOptions{PerPage: 100}}
 	for {
@@ -161,31 +175,37 @@ func orgRepositories(c *Client, org string, wg *sync.WaitGroup, sem chan struct{
 			// If repository is too big, skip it.
 			if repo.Size != nil && *repo.Size > c.cfg.RepositorySizeLimit {
 				c.logger.Warn("repository is too big, skipping", "size_kb", *repo.Size, "repository", repo.GetFullName())
+				repoMetrics["too_big"]++
 				continue
 			}
 			// If repository is empty, skip it.
 			if (repo.Size != nil && *repo.Size == 0) && !c.cfg.IncludeEmpty {
 				c.logger.Warn("repository is empty, skipping", "repository", repo.GetFullName())
+				repoMetrics["empty"]++
 				continue
 			}
 			// If repository is archived, skip it.
 			if (repo.Archived != nil && *repo.Archived) && !c.cfg.IncludeArchived {
 				c.logger.Warn("repository is archived, skipping", "repository", repo.GetFullName())
+				repoMetrics["archived"]++
 				continue
 			}
 			// If repository is disabled, skip it.
 			if (repo.Disabled != nil && *repo.Disabled) && !c.cfg.IncludeDisabled {
 				c.logger.Warn("repository is disabled, skipping", "repository", repo.GetFullName())
+				repoMetrics["disabled"]++
 				continue
 			}
 			// If repository is a fork, skip it.
 			if (repo.Fork != nil && *repo.Fork) && !c.cfg.IncludeForks {
 				c.logger.Warn("repository is a fork, skipping", "repository", repo.GetFullName())
+				repoMetrics["fork"]++
 				continue
 			}
 			// If repository is a template, skip it.
 			if (repo.IsTemplate != nil && *repo.IsTemplate) && !c.cfg.IncludeTemplates {
 				c.logger.Warn("repository is a template, skipping", "repository", repo.GetFullName())
+				repoMetrics["template"]++
 				continue
 			}
 			// If repository hadn't been active for a while, skip it.
@@ -196,10 +216,12 @@ func orgRepositories(c *Client, org string, wg *sync.WaitGroup, sem chan struct{
 
 				if isUpdatedInactive && isPushedInactive {
 					c.logger.Warn("repository has not been active for a while, skipping", "repository", repo.GetFullName())
+					repoMetrics["inactive"]++
 					continue
 				}
 			}
 			allRepos = append(allRepos, *repo.CloneURL)
+			repoMetrics["selected"]++
 		}
 		if resp.NextPage == 0 {
 			break
@@ -208,6 +230,9 @@ func orgRepositories(c *Client, org string, wg *sync.WaitGroup, sem chan struct{
 	}
 
 	c.logger.Debug("organization repository listing completed", "organization", org, "repositories", len(allRepos))
+	for k, v := range repoMetrics {
+		c.metrics.Gauge("repositories", v, []string{"status:" + k})
+	}
 
 	resultChan <- allRepos
 }
