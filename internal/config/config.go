@@ -43,6 +43,14 @@ type LavaConfig struct {
 	ResultsPath string `env:"LAVA_RESULTS_PATH"`
 }
 
+// MetricsConfig represents the metrics configuration.
+type MetricsConfig struct {
+	Enabled   bool     `env:"METRICS_ENABLED" envDefault:"false"`
+	Address   string   `env:"METRICS_ADDRESS" envDefault:"localhost:8125"`
+	Namespace string   `env:"METRICS_NAMESPACE" envDefault:"ghereposec"`
+	Tags      []string `env:"METRICS_TAGS" envSeparator:"," envDefault:"ghereposec:metrics"`
+}
+
 // Config represents the ghe-reposec configuration.
 type Config struct {
 	LogLevel       string `env:"LOG_LEVEL" envDefault:"info"`
@@ -52,8 +60,9 @@ type Config struct {
 	OutputFilePath string `env:"OUTPUT_FILE" envDefault:"/tmp/reposec.csv"`
 	OutputFormat   string `env:"OUTPUT_FORMAT" envDefault:"csv"`
 
-	GHECfg  GHEConfig
-	LavaCfg LavaConfig
+	GHECfg     GHEConfig
+	LavaCfg    LavaConfig
+	MetricsCfg MetricsConfig
 }
 
 // Redacted returns a secret redacted version of the configuration.

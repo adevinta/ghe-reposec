@@ -50,8 +50,14 @@ The `ghe-reposec` tool can be configured using environment variables. Below are 
 - `REPOSEC_LAVA_CONCURRENCY`: The number of concurrent Lava scans (default: `10`).
 - `REPOSEC_LAVA_BINARY_PATH`: The path to the Lava binary (default: `/usr/bin/lava`).
 - `REPOSEC_LAVA_CHECK_IMAGE`: The Lava check image (default: `vulcansec/vulcan-repository-sctrl:a20516f-4aae88d`).
-- `LAVA_RESULTS_PATH`: The path where Lava results (stdout and stderr) will be stored if specified.
+- `REPOSEC_LAVA_RESULTS_PATH`: The path where Lava results (stdout and stderr) will be stored if specified.
 
+### Metrics Configuration
+
+- `REPOSEC_METRICS_ENABLED`: Enable metrics (default: `false`).
+- `REPOSEC_METRICS_ADDRESS`: The statsd listener address (default: `localhost:8125`).
+- `REPOSEC_METRICS_NAMESPACE`: The metrics namespace (default: `ghereposec`).
+- `REPOSEC_METRICS_TAGS`: The metrics tags (default: `ghereposec:metrics`). Multiple tags can be specified separated by commas.
 
 ## Contributing
 
