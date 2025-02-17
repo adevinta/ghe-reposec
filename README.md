@@ -49,7 +49,7 @@ The `ghe-reposec` tool can be configured using environment variables. Below are 
 
 - `REPOSEC_LAVA_CONCURRENCY`: The number of concurrent Lava scans (default: `10`).
 - `REPOSEC_LAVA_BINARY_PATH`: The path to the Lava binary (default: `/usr/bin/lava`).
-- `REPOSEC_LAVA_CHECK_IMAGE`: The Lava check image (default: `vulcansec/vulcan-repository-sctrl:a20516f-4aae88d`).
+- `REPOSEC_LAVA_CHECK_IMAGE`: The Lava check image (default: `vulcansec/vulcan-repository-sctrl:edge`).
 - `REPOSEC_LAVA_RESULTS_PATH`: The path where Lava results (stdout and stderr) will be stored if specified.
 
 ### Metrics Configuration
