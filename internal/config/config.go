@@ -39,7 +39,7 @@ type LavaConfig struct {
 	BinaryPath  string `env:"LAVA_BINARY_PATH" envDefault:"/usr/bin/lava"`
 	// TODO: Build, publish and set a "production ready docker image" once the
 	// check PR has been merged.
-	CheckImage  string `env:"LAVA_CHECK_IMAGE" envDefault:"vulcansec/vulcan-repository-sctrl:a20516f-4aae88d"`
+	CheckImage  string `env:"LAVA_CHECK_IMAGE" envDefault:"vulcansec/vulcan-repository-sctrl:edge"`
 	ResultsPath string `env:"LAVA_RESULTS_PATH"`
 }
 
